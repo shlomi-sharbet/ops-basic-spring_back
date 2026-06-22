@@ -45,7 +45,7 @@ publish:
     - aws --endpoint-url $AWS_ENDPOINT ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $DOCKER_REGISTRY
     - docker build -t $DOCKER_REGISTRY/$APP_NAME:latest . 
     - docker push $DOCKER_REGISTRY/$APP_NAME:latest  
-
+#
 # deploy:
 #   tags:
 #     - my-local-runner
