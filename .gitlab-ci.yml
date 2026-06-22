@@ -1,0 +1,69 @@
+variables:
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_ENDPOINT: http://host.docker.internal:4566
+  DOCKER_REGISTRY: host.docker.internal:4566
+  AWS_DEFAULT_REGION: us-east-1
+  APP_NAME: students-ecs
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+publish:
+  tags:
+    - my-local-runner
+  image: 
+    name: maven:3.8.1-openjdk-11
+    entrypoint: [""]
+  services:
+    - name: docker:dind
+      command: ["--insecure-registry", "host.docker.internal:4566"]
+  before_script:
+    - apt-get update
+    - apt-get install -y python3-pip
+    - pip3 install awscli
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+    - export DB_URL=$(aws --endpoint-url $AWS_ENDPOINT ssm get-parameter --name "students_staging_ecs" --query "Parameter.Value" --output text)
+    - echo $DB_URL
+    - export DB_PASSWORD=$(aws --endpoint-url $AWS_ENDPOINT ssm get-parameter --name "students_staging_ecs_password" --query "Parameter.Value" --output text)
+    - echo $DB_PASSWORD
+    - export DB_USER=$(aws --endpoint-url $AWS_ENDPOINT ssm get-parameter --name "students_staging_ecs_user" --query "Parameter.Value" --output text)
+    - echo $DB_USER
+    - sed -i "s#spring.datasource.url=.*#spring.datasource.url=${DB_URL}#g"  src/main/resources/application.properties
+    - sed -i "s#spring.datasource.username=.*#spring.datasource.username=${DB_USER}#g"  src/main/resources/application.properties
+    - sed -i "s#spring.datasource.password=.*#spring.datasource.password=${DB_PASSWORD}#g"  src/main/resources/application.properties
+    - cat src/main/resources/application.properties
+    - apt-get update
+    - apt-get install -y curl
+    - curl -fsSL https://get.docker.com | sh
+    - aws --version
+    - docker --version
+    - mvn --version
+  script:
+    - mvn clean install
+    - aws --endpoint-url $AWS_ENDPOINT ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+    - docker build -t $DOCKER_REGISTRY/$APP_NAME:latest . 
+    - docker push $DOCKER_REGISTRY/$APP_NAME:latest  
+
+deploy:
+  tags:
+    - my-local-runner
+  image: 
+    name: docker:19.03.10
+    entrypoint: [""]
+  services:
+    - name: docker:dind
+      command: ["--insecure-registry", "host.docker.internal:4566"]
+  before_script:
+    - apk add --no-cache curl jq python py-pip
+    - pip install awscli
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+    - aws --endpoint-url $AWS_ENDPOINT ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+  stage: deploy
+  script:
+    - echo $REPOSITORY_URL:$IMAGE_TAG 
+    - echo "Updating the service..."
+    - aws --endpoint-url $AWS_ENDPOINT ecs update-service --region "${AWS_DEFAULT_REGION}" --cluster "${CI_AWS_ECS_CLUSTER}" --service "${CI_AWS_ECS_SERVICE}"  --force-new-deployment
