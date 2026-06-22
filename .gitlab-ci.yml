@@ -2,7 +2,7 @@ variables:
   AWS_ACCESS_KEY_ID: test
   AWS_SECRET_ACCESS_KEY: test
   AWS_ENDPOINT: http://host.docker.internal:4566
-  DOCKER_REGISTRY: localhost:4566
+  DOCKER_REGISTRY: 000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566
   AWS_DEFAULT_REGION: us-east-1
   APP_NAME: students-ecs
 
