@@ -18,7 +18,7 @@ publish:
     - name: docker:dind
       command: ["--insecure-registry", "host.docker.internal:4566"]
   before_script:
-    - apt-get update
+  #  - apt-get update
     - apt-get install -y python3-pip
     - pip3 install awscli
     - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
