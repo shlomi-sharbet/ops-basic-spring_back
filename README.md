@@ -4,14 +4,32 @@ This project demonstrates a complete local deployment of a Spring Boot applicati
 
 ---
 
+## System Architecture
+
+Below is the high-level routing and infrastructure architecture:
+
+```mermaid
+graph TD
+    Route53[Route 53: ecs.shlomi.com] --> CloudFront[CloudFront Distribution]
+    
+    CloudFront -- "/api/*" --> ALB[Application Load Balancer]
+    CloudFront -- "*" --> S3[S3 Bucket: Static Website]
+    
+    ALB --> ECS[ECS Fargate: App Server 8080]
+    ECS --> RDS[(RDS MySQL: 3306)]
+```
+
+---
+
 ## Table of Contents
-1. [Prerequisites](#prerequisites)
-2. [Infrastructure Setup (Terraform)](#infrastructure-setup-terraform)
-3. [Local GitLab Runner Setup](#local-gitlab-runner-setup)
-4. [GitLab Project Configuration](#gitlab-project-configuration)
-5. [SSM Parameter Store Configuration](#ssm-parameter-store-configuration)
-6. [Pipeline execution & Verification](#pipeline-execution--verification)
-7. [Resource Cleanup](#resource-cleanup)
+1. [System Architecture](#system-architecture)
+2. [Prerequisites](#prerequisites)
+3. [Infrastructure Setup (Terraform)](#infrastructure-setup-terraform)
+4. [Local GitLab Runner Setup](#local-gitlab-runner-setup)
+5. [GitLab Project Configuration](#gitlab-project-configuration)
+6. [SSM Parameter Store Configuration](#ssm-parameter-store-configuration)
+7. [Pipeline execution & Verification](#pipeline-execution--verification)
+8. [Resource Cleanup](#resource-cleanup)
 
 ---
 
@@ -220,13 +238,28 @@ Navigate to **Build** -> **Pipelines** in your GitLab project UI to watch the ru
 Once the deployment succeeds and the task is healthy, you can access the Swagger UI:
 * **Swagger API Endpoint:** [http://springboot-lb.elb.localhost.localstack.cloud:8080/swagger-ui.html](http://springboot-lb.elb.localhost.localstack.cloud:8080/swagger-ui.html)
 
-### 3. Verify Application via CloudFront
-Retrieve the CloudFront domain name from the Terraform outputs:
-```bash
-tflocal output cloudfront_domain_name
-```
-Then, access the application in your browser at:
-`http://<cloudfront_domain_name>.cloudfront.localhost.localstack.cloud`
+> [!TIP]
+> **Functional Test:** You can use the Swagger UI to create a new student record by calling the `POST` endpoint under `student-controller`. Enter the student's details, including a test username and password, and execute the request to save it to the RDS database.
+
+### 3. Verify Application via CloudFront (End-to-End Integration)
+
+Since this repository only hosts the backend application, the frontend (Angular) code is managed in a separate GitHub repository. The frontend has its own pipeline that builds and syncs the static files to the S3 bucket (`shlomi.backend.students`) in LocalStack.
+
+Through CloudFront, both repositories are unified under a single domain:
+* **Frontend UI (Static Web):** Default behavior (`*`) routes traffic to the S3 website origin.
+* **Backend API (Spring Boot):** The `/api/*` path pattern routes traffic to the ECS Application Load Balancer.
+
+To verify the full integration:
+1. Ensure the **Backend** is deployed and running on ECS (via this GitLab pipeline).
+2. Ensure the **Frontend** is deployed to S3 (via your frontend GitHub Actions pipeline, making sure it points to the same local LocalStack S3 bucket).
+3. Retrieve the CloudFront domain name from the Terraform outputs:
+   ```bash
+   tflocal output cloudfront_domain_name
+   ```
+4. Access the application in your browser at:
+   `http://<cloudfront_domain_name>.cloudfront.localhost.localstack.cloud`
+5. Try logging in to the frontend UI using the **username** and **password** of the student you created in Step 2 via Swagger.
+6. Verify that the login succeeds and that requests to `/api/...` in the Browser DevTools (Network tab) are correctly routed to the backend and resolve with `200 OK` status codes without encountering CORS issues.
 
 ---
 
