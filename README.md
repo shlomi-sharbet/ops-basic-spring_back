@@ -243,7 +243,7 @@ Once the deployment succeeds and the task is healthy, you can access the Swagger
 
 ### 3. Verify Application via CloudFront (End-to-End Integration)
 
-Since this repository only hosts the backend application, the frontend (Angular) code is managed in a separate GitHub repository. The frontend has its own pipeline that builds and syncs the static files to the S3 bucket (`shlomi.backend.students`) in LocalStack.
+Since this repository only hosts the backend application, the frontend (Angular) code is managed in a separate GitHub repository: [ops-basic-angular_front](https://github.com/shlomi-sharbet/ops-basic-angular_front). The frontend has its own pipeline that automatically builds and syncs the static files to the S3 bucket (`shlomi.backend.students`) in LocalStack whenever a change is pushed.
 
 Through CloudFront, both repositories are unified under a single domain:
 * **Frontend UI (Static Web):** Default behavior (`*`) routes traffic to the S3 website origin.
