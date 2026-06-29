@@ -180,14 +180,20 @@ In GitLab, go to **Settings** -> **CI/CD** -> Expand **Variables** and define th
 > [!TIP]
 > **This step is fully automated!** The Terraform `ssm` module automatically provisions these parameters in LocalStack with the dynamically generated RDS endpoint. You **do not** need to run any manual `put-parameter` commands.
 
-If you wish to verify that the parameters were successfully created and check their values, run the following command:
+If you wish to verify that the parameters were successfully created and check their values, run the following command (using `awslocal`):
 ```bash
-aws --endpoint-url=http://localhost:4566 ssm get-parameter --name "students_staging_ecs" --region us-east-1
+awslocal ssm get-parameter --name "students_staging_ecs"
+
+# Fallback using standard aws CLI:
+# AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 ssm get-parameter --name "students_staging_ecs" --region us-east-1
 ```
 
 To list all registered parameters:
 ```bash
-aws --endpoint-url=http://localhost:4566 ssm describe-parameters --region us-east-1
+awslocal ssm describe-parameters
+
+# Fallback using standard aws CLI:
+# AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 ssm describe-parameters --region us-east-1
 ```
 
 
