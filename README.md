@@ -1,6 +1,6 @@
-# ops-basic-spring - ECS Deployment on LocalStack with GitLab CI/CD
+# ops-basic-spring - ECS Deployment on LocalStack with GitHub Actions
 
-This project demonstrates a complete local deployment of a Spring Boot application to a simulated **Amazon ECS (Fargate)** service using **LocalStack**. It uses **Terraform** for Infrastructure as Code (IaC) and **GitLab CI/CD** (via a local GitLab Runner) for automated build and deployment pipelines.
+This project demonstrates a complete local deployment of a Spring Boot application to a simulated **Amazon ECS (Fargate)** service using **LocalStack**. It uses **Terraform** for Infrastructure as Code (IaC) and **GitHub Actions** (via a local self-hosted runner) for automated build and deployment pipelines.
 
 ---
 
@@ -25,8 +25,8 @@ graph TD
 1. [System Architecture](#system-architecture)
 2. [Prerequisites](#prerequisites)
 3. [Infrastructure Setup (Terraform)](#infrastructure-setup-terraform)
-4. [Local GitLab Runner Setup](#local-gitlab-runner-setup)
-5. [GitLab Project Configuration](#gitlab-project-configuration)
+4. [Local GitHub Actions Runner Setup](#local-github-actions-runner-setup)
+5. [GitHub Repository Configuration](#github-repository-configuration)
 6. [SSM Parameter Store Configuration](#ssm-parameter-store-configuration)
 7. [Pipeline execution & Verification](#pipeline-execution--verification)
 8. [Resource Cleanup](#resource-cleanup)
@@ -115,81 +115,59 @@ tflocal output -raw iam_secret_key
 
 ---
 
-## Local GitLab Runner Setup
+## Local GitHub Actions Runner Setup
 
-To run CI/CD jobs locally against LocalStack, you must configure a local GitLab Runner in a Docker container. The runner requires elevated privileges (`privileged = true`) to support Docker-in-Docker (DinD) image building.
+To run CI/CD workflows locally against LocalStack, you must configure a local **GitHub Actions Self-Hosted Runner** on your machine. This runner must have access to the local Docker daemon.
 
-### Step 1: Launch the Runner Container
-Start the GitLab Runner container, mapping the host's Docker socket and persisting configuration to a volume named `gitlab-runner-config`:
-```bash
-docker run -d --name gitlab-runner --restart always \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v gitlab-runner-config:/etc/gitlab-runner \
-  gitlab/gitlab-runner:latest
-```
+### Step 1: Create a Self-Hosted Runner in GitHub
+1. Open your repository on GitHub.
+2. Navigate to: **Settings** -> **Actions** -> **Runners**.
+3. Click on **New self-hosted runner**.
+4. Select your operating system (Windows / Linux / macOS) and architecture.
+5. Follow the download and configuration commands provided in the GitHub UI.
+6. When configuring the runner, set the runner label/tag to **`self-hosted`**.
 
-### Step 2: Create a Project Runner in GitLab
-1. Open your project on GitLab.
-2. Navigate to: **Settings** -> **CI/CD** -> Expand **Runners**.
-3. Click on **New project runner**.
-4. Configure tags for the runner (e.g., `my-local-runner`).
-5. Click **Create runner** and copy the generated **Runner token**.
+### Step 2: Start the Runner
+- **On Linux/macOS:** Run `./run.sh` in the runner directory.
+- **On Windows:** Run `.\run.cmd` in the runner directory (or install it as a Windows Service).
 
-### Step 3: Register the Runner
-Register the runner container using the following command:
-```bash
-docker run --rm -it -v gitlab-runner-config:/etc/gitlab-runner gitlab/gitlab-runner:latest register
-```
-
-Provide the following answers when prompted in the terminal:
-1. **GitLab instance URL:** Enter `https://gitlab.com/`
-2. **Registration token:** Paste the token copied in Step 2.
-3. **Description:** Enter a description (e.g., `my-docker-runner`).
-4. **Tags:** Enter the tag you defined (e.g., `my-local-runner`).
-5. **Executor:** Enter **`docker`**.
-6. **Default Docker image:** Enter **`docker:dind`**.
-
-### Step 4: Configure Privileged Mode (Mandatory for DinD)
-The GitLab CI/CD jobs run `docker build` commands inside the runner container. Thus, the runner executor must be configured with `privileged = true`.
-
-1. Open the runner's configuration file (`config.toml`) using a temporary Alpine editor:
-   ```bash
-   docker run --rm -it -v gitlab-runner-config:/etc/gitlab-runner alpine vi /etc/gitlab-runner/config.toml
-   ```
-2. Locate the `[runners.docker]` section and change `privileged = false` to **`privileged = true`**:
-   ```toml
-   [runners.docker]
-     privileged = true
-   ```
-   *(In the `vi` editor: navigate to the line, press `i` to enter insert mode, make changes, press `Esc`, type `:wq` and press Enter to save and exit).*
-3. Restart the runner container to apply the configuration:
-   ```bash
-   docker restart gitlab-runner
-   ```
+Verify that the runner status in GitHub shows as **Idle** and **Active**.
 
 ---
 
-## GitLab Project Configuration
+## GitHub Repository Configuration
 
-### 1. Import Repository and Branch Setup
-1. Create a new repository in GitLab and import this project.
-2. Create and switch to a branch named `ecs`.
-3. Verify that the jobs in your [.gitlab-ci.yml](.gitlab-ci.yml) file target your local runner via the correct tag:
+### 1. Push to GitHub and Branch Setup
+1. Push this project to your new GitHub repository:
+   ```bash
+   git remote remove origin
+   git remote add origin https://github.com/shlomi-sharbet/ops-basic-spring_back.git
+   git checkout -b ecs
+   git push -u origin ecs
+   ```
+2. Verify that the workflow file [.github/workflows/ci.yml](.github/workflows/ci.yml) specifies:
    ```yaml
-   tags:
-     - my-local-runner
+   runs-on: self-hosted
    ```
 
-### 2. Configure CI/CD Variables
-In GitLab, go to **Settings** -> **CI/CD** -> Expand **Variables** and define the following variables (ensure **Protect variable** is unchecked if your `ecs` branch is not protected):
+### 2. Configure Secrets and Variables
+In GitHub, go to **Settings** -> **Secrets and variables** -> **Actions** and define the following:
 
+#### Repository Variables (Variables Tab):
 | Variable Key | Value / Description |
 | :--- | :--- |
-| **`AWS_ACCESS_KEY_ID`** | tflocal output iam_access_key |
-| **`AWS_SECRET_ACCESS_KEY`** | tflocal output -raw iam_secret_key |
 | **`AWS_DEFAULT_REGION`** | `us-east-1` |
 | **`CI_AWS_ECS_CLUSTER`** | `ecs-stage-cluster` |
 | **`CI_AWS_ECS_SERVICE`** | `ecs-stage-service` |
+| **`AWS_ENDPOINT`** | `http://localhost:4566` *(Use `http://host.docker.internal:4566` if your GitHub runner container is dockerized)* |
+| **`DOCKER_REGISTRY`** | `000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566` |
+| **`APP_NAME`** | `students-ecs` |
+
+#### Repository Secrets (Secrets Tab):
+| Secret Key | Value / Description |
+| :--- | :--- |
+| **`AWS_ACCESS_KEY_ID`** | AWS Access Key ID (e.g. `test` or from `tflocal output iam_access_key`) |
+| **`AWS_SECRET_ACCESS_KEY`** | AWS Secret Access Key (e.g. `test` or from `tflocal output -raw iam_secret_key`) |
 
 ---
 
@@ -220,7 +198,7 @@ awslocal ssm describe-parameters
 ## Pipeline execution & Verification
 
 ### 1. Trigger the Pipeline
-Make a minor code change to verify that the pipeline builds the JAR, package it as a Docker image, pushes it to ECR, and deploys it to ECS. For instance, modify the endpoint path or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in:
+Make a minor code change to verify that the pipeline builds the JAR, packages it as a Docker image, pushes it to ECR, and deploys it to ECS. For instance, modify the endpoint path or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in:
 [StudentsController.java](src/main/java/com/handson/basic/controller/StudentsController.java)
 
 *By doing this, you will be able to see the change reflected under the `students-controller` section in the Swagger UI once the deployment completes.*
@@ -232,7 +210,7 @@ git commit -m "update getHighSatStudents test"
 git push origin ecs
 ```
 
-Navigate to **Build** -> **Pipelines** in your GitLab project UI to watch the runner compile the Java application via Maven, build the Docker image, upload it to the local ECR repository, and update the ECS service.
+Navigate to the **Actions** tab in your GitHub repository UI to watch the workflow compile the Java application via Maven, build the Docker image, upload it to the local ECR repository, and update the ECS service.
 
 ### 2. Verify Application via Application Load Balancer
 Once the deployment succeeds and the task is healthy, you can access the Swagger UI:
@@ -265,10 +243,10 @@ To verify the full integration:
 
 ## Troubleshooting & Common Issues
 
-* **Docker daemon connection errors in GitLab CI:**
-  If the pipeline fails with `Cannot connect to the Docker daemon`, make sure that you configured `privileged = true` in your runner's `config.toml` (under `[runners.docker]`) and restarted the runner (`docker restart gitlab-runner`).
-* **Connection issues to `host.docker.internal`:**
-  If the runner cannot reach LocalStack, verify that LocalStack is running (`localstack status`). If you are running on a Linux/WSL2 host, you may need to add `--add-host=host.docker.internal:host-gateway` to the runner configuration or verify your Docker network settings.
+* **Docker daemon connection errors in GitHub Actions:**
+  If the workflow fails with `Cannot connect to the Docker daemon`, ensure that the user running the self-hosted runner has the necessary permissions to access the docker socket (e.g., added to the `docker` group on Linux) and that Docker is running.
+* **Connection issues to LocalStack:**
+  If the runner cannot reach LocalStack, verify that LocalStack is running (`localstack status`). If your runner is running directly on the host, ensure `AWS_ENDPOINT` is configured as `http://localhost:4566`. If it is dockerized, make sure it is configured to use `http://host.docker.internal:4566` and has access to the host gateway.
 * **Database Connection Timeout:**
   If the Spring Boot application fails to connect to the database, use the manual connection commands in [Verify Database Initialization](#manual-database-connection-verification) to verify that the RDS instance is running and the database and users exist.
 

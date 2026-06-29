@@ -1,0 +1,89 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - ecs
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || 'test' }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || 'test' }}
+  AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION || 'us-east-1' }}
+  AWS_ENDPOINT: ${{ vars.AWS_ENDPOINT || 'http://localhost:4566' }}
+  DOCKER_REGISTRY: ${{ vars.DOCKER_REGISTRY || '000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566' }}
+  APP_NAME: ${{ vars.APP_NAME || 'students-ecs' }}
+  CI_AWS_ECS_CLUSTER: ${{ vars.CI_AWS_ECS_CLUSTER || 'ecs-stage-cluster' }}
+  CI_AWS_ECS_SERVICE: ${{ vars.CI_AWS_ECS_SERVICE || 'ecs-stage-service' }}
+
+jobs:
+  publish:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java and Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: 'maven'
+
+      - name: Configure local AWS credentials
+        run: |
+          aws configure set aws_access_key_id ${{ env.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ${{ env.AWS_DEFAULT_REGION }}
+        shell: bash
+
+      - name: Fetch DB Parameters from SSM and Update properties
+        run: |
+          # Retrieve parameters from LocalStack SSM Parameter Store
+          DB_URL=$(aws --endpoint-url ${{ env.AWS_ENDPOINT }} ssm get-parameter --name "students_staging_ecs" --query "Parameter.Value" --output text)
+          echo "Fetched DB_URL: $DB_URL"
+          
+          DB_PASSWORD=$(aws --endpoint-url ${{ env.AWS_ENDPOINT }} ssm get-parameter --name "students_staging_ecs_password" --query "Parameter.Value" --output text)
+          
+          DB_USER=$(aws --endpoint-url ${{ env.AWS_ENDPOINT }} ssm get-parameter --name "students_staging_ecs_user" --query "Parameter.Value" --output text)
+          
+          # Replace placeholder datasource configurations in application.properties
+          sed -i "s#spring.datasource.url=.*#spring.datasource.url=${DB_URL}#g" src/main/resources/application.properties
+          sed -i "s#spring.datasource.username=.*#spring.datasource.username=${DB_USER}#g" src/main/resources/application.properties
+          sed -i "s#spring.datasource.password=.*#spring.datasource.password=${DB_PASSWORD}#g" src/main/resources/application.properties
+          
+          cat src/main/resources/application.properties
+        shell: bash
+
+      - name: Build with Maven
+        run: mvn clean install
+
+      - name: Docker login to LocalStack ECR
+        run: |
+          aws --endpoint-url ${{ env.AWS_ENDPOINT }} ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ env.DOCKER_REGISTRY }}
+        shell: bash
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.APP_NAME }}:latest .
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.APP_NAME }}:latest
+        shell: bash
+
+  deploy:
+    needs: publish
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure local AWS credentials
+        run: |
+          aws configure set aws_access_key_id ${{ env.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ${{ env.AWS_DEFAULT_REGION }}
+        shell: bash
+
+      - name: Deploy to LocalStack ECS
+        run: |
+          echo "Updating the service..."
+          aws --endpoint-url ${{ env.AWS_ENDPOINT }} ecs update-service --region "${{ env.AWS_DEFAULT_REGION }}" --cluster "${{ env.CI_AWS_ECS_CLUSTER }}" --service "${{ env.CI_AWS_ECS_SERVICE }}" --force-new-deployment
+        shell: bash
