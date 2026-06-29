@@ -1,0 +1,66 @@
+# ==========================================
+# Maven & Java Build Artifacts
+# ==========================================
+target/
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# ==========================================
+# IDEs and Editors Configuration
+# ==========================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# Eclipse
+.metadata/
+.classpath
+.project
+.settings/
+*.launch
+bin/
+
+# VS Code
+.vscode/
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# ==========================================
+# Terraform & Infrastructure as Code (IaC)
+# ==========================================
+# Local .terraform directories (contains downloaded providers and modules)
+**/.terraform/
+
+# Terraform state files (crucial to ignore as they contain secrets and system states)
+*.tfstate
+*.tfstate.*
+terraform.tfstate*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Terraform variables files (often contain passwords/secrets)
+*.tfvars
+*.tfvars.json
+
+# Override files (local developer configurations)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
