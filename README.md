@@ -182,12 +182,12 @@ In GitLab, go to **Settings** -> **CI/CD** -> Expand **Variables** and define th
 
 If you wish to verify that the parameters were successfully created and check their values, run the following command:
 ```bash
-aws --endpoint-url=http://localhost:4566 ssm get-parameter --name "students_staging_ecs"
+aws --endpoint-url=http://localhost:4566 ssm get-parameter --name "students_staging_ecs" --region us-east-1
 ```
 
 To list all registered parameters:
 ```bash
-aws --endpoint-url=http://localhost:4566 ssm describe-parameters
+aws --endpoint-url=http://localhost:4566 ssm describe-parameters --region us-east-1
 ```
 
 
