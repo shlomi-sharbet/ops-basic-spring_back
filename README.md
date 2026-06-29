@@ -167,8 +167,8 @@ In GitLab, go to **Settings** -> **CI/CD** -> Expand **Variables** and define th
 
 | Variable Key | Value / Description |
 | :--- | :--- |
-| **`AWS_ACCESS_KEY_ID`** | The IAM access key retrieved from Terraform outputs |
-| **`AWS_SECRET_ACCESS_KEY`** | The IAM secret key retrieved from Terraform outputs |
+| **`AWS_ACCESS_KEY_ID`** | tflocal output iam_access_key |
+| **`AWS_SECRET_ACCESS_KEY`** | tflocal output -raw iam_secret_key |
 | **`AWS_DEFAULT_REGION`** | `us-east-1` |
 | **`CI_AWS_ECS_CLUSTER`** | `ecs-stage-cluster` |
 | **`CI_AWS_ECS_SERVICE`** | `ecs-stage-service` |
