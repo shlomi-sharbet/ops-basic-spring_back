@@ -21,27 +21,12 @@ graph TD
 
 ---
 
-## Table of Contents
-1. [System Architecture](#system-architecture)
-2. [Prerequisites](#prerequisites)
-3. [Infrastructure Setup (Terraform)](#infrastructure-setup-terraform)
-4. [Local GitHub Actions Runner Setup](#local-github-actions-runner-setup)
-5. [GitHub Repository Configuration](#github-repository-configuration)
-6. [SSM Parameter Store Configuration](#ssm-parameter-store-configuration)
-7. [Pipeline execution & Verification](#pipeline-execution--verification)
-8. [Resource Cleanup](#resource-cleanup)
-
----
-
 ## Prerequisites
 
 Before starting, ensure that the following tools are installed and running on your machine:
 
 * **Docker & Docker Compose**
-* **LocalStack** running in the background:
-  ```bash
-  localstack start
-  ```
+* **LocalStack** running in the background (`localstack start`)
 * **Terraform** CLI
 * **terraform-local (tflocal)** CLI (Recommended). To install:
   ```bash
@@ -54,15 +39,12 @@ Before starting, ensure that the following tools are installed and running on yo
 
 ---
 
-## Infrastructure Setup (Terraform)
+## Local Setup & Execution
 
-We use Terraform (or `tflocal`) to provision all local AWS resources in LocalStack (including RDS, ECS Cluster & Service, ECR, Application Load Balancer, S3, CloudFront, and IAM).
-
-> [!NOTE]
-> The [provider.tf](terraform/environments/dev/provider.tf) file is pre-configured to redirect all API calls to LocalStack at `http://localhost:4566`. You can run standard `terraform` commands or use `tflocal`.
+We use Terraform (or `tflocal`) to provision all local AWS resources in LocalStack (RDS, ECS, ECR, ALB, S3, CloudFront, and IAM).
 
 ### 1. Apply Terraform Configuration
-Navigate to the Terraform dev environment directory and execute:
+Navigate to the Terraform dev environment directory (`terraform/environments/dev`) and run:
 ```bash
 tflocal init
 # OR: terraform init
@@ -72,154 +54,59 @@ tflocal apply -auto-approve
 ```
 
 ### 2. Verify Database (RDS) Initialization
-During the provisioning phase, the Terraform module automatically executes the [init-db.sql](terraform/environments/dev/init-db.sql) script to create the database schema and application-level privileges:
+The Terraform module automatically runs the `init-db.sql` script to create the database schema:
 * **Database Name:** `students_stage_ecs`
 * **Application Username:** `students_staging_ecs`
 * **Application Password:** `students_staging_ecs`
 
-#### Manual Database Connection Verification:
-Retrieve the local RDS Endpoint from the Terraform output:
+#### Manual Database Connection Verification
+Retrieve the local RDS Endpoint:
 ```bash
 tflocal output rds_endpoint
 ```
-
-* **Connect as Master User:**
-  ```bash
-  mysql -h localhost.localstack.cloud -P 4510 -u admin -p'Unix11!!'
-  ```
-  *(or port `3306` if connecting from within a container on the same Docker network)*
-
-* **Connect as Application User:**
-  ```bash
-  mysql -h localhost.localstack.cloud -P 4510 -u students_staging_ecs -pstudents_staging_ecs -D students_stage_ecs
-  ```
-
-> [!TIP]
-> If you need to recreate the database or application user privileges manually, execute the following SQL queries as the Master User:
-> ```sql
-> CREATE DATABASE IF NOT EXISTS students_stage_ecs;
-> CREATE USER IF NOT EXISTS 'students_staging_ecs'@'%' IDENTIFIED BY 'students_staging_ecs';
-> GRANT ALL PRIVILEGES ON students_stage_ecs.* TO 'students_staging_ecs'@'%';
-> FLUSH PRIVILEGES;
-> ```
-
-### 3. Retrieve IAM Credentials
-To allow the GitLab Runner to authenticate and push images to LocalStack, retrieve the generated IAM credentials:
+Connect as Master User:
 ```bash
-# Retrieve Access Key ID
-tflocal output iam_access_key
-
-# Retrieve Secret Access Key
-tflocal output -raw iam_secret_key
+mysql -h localhost.localstack.cloud -P 4510 -u admin -p'Unix11!!'
+```
+Connect as Application User:
+```bash
+mysql -h localhost.localstack.cloud -P 4510 -u students_staging_ecs -pstudents_staging_ecs -D students_stage_ecs
 ```
 
 ---
 
-## Local GitHub Actions Runner Setup
+## Deployment & Runner Setup
 
-To run CI/CD workflows locally against LocalStack, you must configure a local **GitHub Actions Self-Hosted Runner** on your machine. This runner must have access to the local Docker daemon.
-
-### Step 1: Create a Self-Hosted Runner in GitHub
+### 1. Local GitHub Actions Runner Setup
+To run CI/CD workflows locally against LocalStack, you must configure a local **GitHub Actions Self-Hosted Runner**:
 1. Open your repository on GitHub.
 2. Navigate to: **Settings** -> **Actions** -> **Runners**.
-3. Click on **New self-hosted runner**.
-4. Select your operating system (Windows / Linux / macOS) and architecture.
-5. Follow the download and configuration commands provided in the GitHub UI.
-6. When configuring the runner, set the runner label/tag to **`self-hosted`**.
+3. Click on **New self-hosted runner** and follow the configuration steps.
+4. Set the runner label/tag to **`self-hosted`**.
+5. Start the runner (run `./run.sh` on Linux/macOS or `.\run.cmd` on Windows).
 
-### Step 2: Start the Runner
-- **On Linux/macOS:** Run `./run.sh` in the runner directory.
-- **On Windows:** Run `.\run.cmd` in the runner directory (or install it as a Windows Service).
+### 2. Trigger the Pipeline (Verification Exercise)
+Every commit pushed to the `ecs` branch triggers the pipeline (builds the JAR, packages it in a Docker image, pushes to ECR, and updates ECS).
 
-Verify that the runner status in GitHub shows as **Idle** and **Active**.
-
----
-
-## GitHub Repository Configuration
-
-### 1. Push to GitHub and Branch Setup
-1. Push this project to your new GitHub repository:
+To verify the integration:
+1. Modify a response or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in [StudentsController.java](file:///c:/Users/shlom/Downloads/%D7%AA%D7%A8%D7%92%D7%95%D7%9C%20%D7%93%D7%91%D7%90%D7%95%D7%A4%D7%A1/%D7%A4%D7%A8%D7%95%D7%99%D7%99%D7%A7%D7%98%D7%99%D7%9D/%D7%AA%D7%A8%D7%92%D7%95%D7%9C%20handson-academy/ECS/ops-basic-spring_github/src/main/java/com/handson/basic/controller/StudentsController.java).
+   *(By doing this, you will be able to see the change reflected under the `student-controller` section in the Swagger UI once the deployment completes).*
+2. Commit and push your changes to the `ecs` branch:
    ```bash
-   git remote remove origin
-   git remote add origin https://github.com/shlomi-sharbet/ops-basic-spring_back.git
-   git checkout -b ecs
-   git push -u origin ecs
+   git add src/main/java/com/handson/basic/controller/StudentsController.java
+   git commit -m "update getHighSatStudents test"
+   git push origin ecs
    ```
-2. Verify that the workflow file [.github/workflows/ci.yml](.github/workflows/ci.yml) specifies:
-   ```yaml
-   runs-on: self-hosted
-   ```
+3. Navigate to the **Actions** tab in your GitHub repository UI to watch the workflow compile the Java application via Maven, build the Docker image, upload it to ECR, and update the ECS service.
 
-### 2. Configure Secrets and Variables
-In GitHub, go to **Settings** -> **Secrets and variables** -> **Actions** and define the following:
-
-#### Repository Variables (Variables Tab):
-| Variable Key | Value / Description |
-| :--- | :--- |
-| **`AWS_DEFAULT_REGION`** | `us-east-1` |
-| **`CI_AWS_ECS_CLUSTER`** | `ecs-stage-cluster` |
-| **`CI_AWS_ECS_SERVICE`** | `ecs-stage-service` |
-| **`AWS_ENDPOINT`** | `http://localhost:4566` *(Use `http://host.docker.internal:4566` if your GitHub runner container is dockerized)* |
-| **`DOCKER_REGISTRY`** | `000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566` |
-| **`APP_NAME`** | `students-ecs` |
-
-#### Repository Secrets (Secrets Tab):
-| Secret Key | Value / Description |
-| :--- | :--- |
-| **`AWS_ACCESS_KEY_ID`** | AWS Access Key ID (e.g. `test` or from `tflocal output iam_access_key`) |
-| **`AWS_SECRET_ACCESS_KEY`** | AWS Secret Access Key (e.g. `test` or from `tflocal output -raw iam_secret_key`) |
-
----
-
-## SSM Parameter Store Configuration
-
-> [!TIP]
-> **This step is fully automated!** The Terraform `ssm` module automatically provisions these parameters in LocalStack with the dynamically generated RDS endpoint. You **do not** need to run any manual `put-parameter` commands.
-
-If you wish to verify that the parameters were successfully created and check their values, run the following command (using `awslocal`):
-```bash
-awslocal ssm get-parameter --name "students_staging_ecs"
-
-# Fallback using standard aws CLI:
-# AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 ssm get-parameter --name "students_staging_ecs" --region us-east-1
-```
-
-To list all registered parameters:
-```bash
-awslocal ssm describe-parameters
-
-# Fallback using standard aws CLI:
-# AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 ssm describe-parameters --region us-east-1
-```
-
-
----
-
-## Pipeline execution & Verification
-
-### 1. Trigger the Pipeline
-Make a minor code change to verify that the pipeline builds the JAR, packages it as a Docker image, pushes it to ECR, and deploys it to ECS. For instance, modify the endpoint path or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in:
-[StudentsController.java](src/main/java/com/handson/basic/controller/StudentsController.java)
-
-*By doing this, you will be able to see the change reflected under the `students-controller` section in the Swagger UI once the deployment completes.*
-
-After modifying, commit and push your changes to the `ecs` branch:
-```bash
-git add src/main/java/com/handson/basic/controller/StudentsController.java
-git commit -m "update getHighSatStudents test"
-git push origin ecs
-```
-
-Navigate to the **Actions** tab in your GitHub repository UI to watch the workflow compile the Java application via Maven, build the Docker image, upload it to the local ECR repository, and update the ECS service.
-
-### 2. Verify Application via Application Load Balancer
+### 3. Verify Application via Application Load Balancer
 Once the deployment succeeds and the task is healthy, you can access the Swagger UI:
 * **Swagger API Endpoint:** [http://springboot-lb.elb.localhost.localstack.cloud:8080/swagger-ui.html](http://springboot-lb.elb.localhost.localstack.cloud:8080/swagger-ui.html)
 
 > [!TIP]
 > **Functional Test:** You can use the Swagger UI to create a new student record by calling the `POST` endpoint under `student-controller`. Enter the student's details, including a test username and password, and execute the request to save it to the RDS database.
 
-### 3. Verify Application via CloudFront (End-to-End Integration)
+### 4. Verify Application via CloudFront (End-to-End Integration)
 
 Since this repository only hosts the backend application, the frontend (Angular) code is managed in a separate GitHub repository: [ops-basic-angular_front](https://github.com/shlomi-sharbet/ops-basic-angular_front). The frontend has its own pipeline that automatically builds and syncs the static files to the S3 bucket (`shlomi.backend.students`) in LocalStack whenever a change is pushed.
 
@@ -228,16 +115,40 @@ Through CloudFront, both repositories are unified under a single domain:
 * **Backend API (Spring Boot):** The `/api/*` path pattern routes traffic to the ECS Application Load Balancer.
 
 To verify the full integration:
-1. Ensure the **Backend** is deployed and running on ECS (via this GitLab pipeline).
+1. Ensure the **Backend** is deployed and running on ECS (via this GitHub Actions pipeline).
 2. Ensure the **Frontend** is deployed to S3 (via your frontend GitHub Actions pipeline, making sure it points to the same local LocalStack S3 bucket).
 3. Retrieve the CloudFront domain name from the Terraform outputs:
-   ```bash
-   tflocal output cloudfront_domain_name
-   ```
+  ```bash
+  tflocal output cloudfront_domain_name
+  ```
 4. Access the application in your browser at:
    `http://<cloudfront_domain_name>.cloudfront.localhost.localstack.cloud`
 5. Try logging in to the frontend UI using the **username** and **password** of the student you created in Step 2 via Swagger.
 6. Verify that the login succeeds and that requests to `/api/...` in the Browser DevTools (Network tab) are correctly routed to the backend and resolve with `200 OK` status codes without encountering CORS issues.
+---
+
+## Configuration & Secrets
+
+### 1. GitHub Variables & Secrets
+Configure the following in GitHub under **Settings** -> **Secrets and variables** -> **Actions**:
+
+#### Variables:
+* `AWS_DEFAULT_REGION`: `us-east-1`
+* `CI_AWS_ECS_CLUSTER`: `ecs-stage-cluster`
+* `CI_AWS_ECS_SERVICE`: `ecs-stage-service`
+* `AWS_ENDPOINT`: `http://localhost:4566` (use `http://host.docker.internal:4566` if runner is containerized)
+* `DOCKER_REGISTRY`: `000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566`
+* `APP_NAME`: `students-ecs`
+
+#### Secrets:
+* `AWS_ACCESS_KEY_ID`: Retrieve using `tflocal output iam_access_key` (or use `test`)
+* `AWS_SECRET_ACCESS_KEY`: Retrieve using `tflocal output -raw iam_secret_key` (or use `test`)
+
+### 2. SSM Parameter Store
+The application parameters are provisioned automatically in LocalStack SSM Parameter Store by Terraform. You can check them using:
+```bash
+awslocal ssm describe-parameters
+```
 
 ---
 
