@@ -126,7 +126,7 @@ To verify the full integration:
   ```
 4. Access the application in your browser at:
    `http://<cloudfront_domain_name>.cloudfront.localhost.localstack.cloud`
-5. Try logging in to the frontend UI using the **username** and **password** of the student you created in Step 2 via Swagger.
+5. Try logging in to the frontend UI using the **username** and **password** of the student you created via Swagger (in the previous step).
 6. Verify that the login succeeds and that requests to `/api/...` in the Browser DevTools (Network tab) are correctly routed to the backend and resolve with `200 OK` status codes without encountering CORS issues.
 ---
 
