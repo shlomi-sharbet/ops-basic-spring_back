@@ -89,9 +89,12 @@ To run CI/CD workflows locally against LocalStack, you must configure a local **
 Every commit pushed to the `ecs` branch triggers the pipeline (builds the JAR, packages it in a Docker image, pushes to ECR, and updates ECS).
 
 To verify the integration:
-1. Modify a response or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in [StudentsController.java](file:///c:/Users/shlom/Downloads/%D7%AA%D7%A8%D7%92%D7%95%D7%9C%20%D7%93%D7%91%D7%90%D7%95%D7%A4%D7%A1/%D7%A4%D7%A8%D7%95%D7%99%D7%99%D7%A7%D7%98%D7%99%D7%9D/%D7%AA%D7%A8%D7%92%D7%95%D7%9C%20handson-academy/ECS/ops-basic-spring_github/src/main/java/com/handson/basic/controller/StudentsController.java).
-   *(By doing this, you will be able to see the change reflected under the `student-controller` section in the Swagger UI once the deployment completes).*
-2. Commit and push your changes to the `ecs` branch:
+1. Modify a response or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in:
+   [StudentsController.java](src/main/java/com/handson/basic/controller/StudentsController.java)
+
+*By doing this, you will be able to see the change reflected under the `students-controller` section in the Swagger UI once the deployment completes.*
+
+After modifying, commit and push your changes to the `ecs` branch:
    ```bash
    git add src/main/java/com/handson/basic/controller/StudentsController.java
    git commit -m "update getHighSatStudents test"
@@ -154,12 +157,18 @@ awslocal ssm describe-parameters
 
 ## Troubleshooting & Common Issues
 
-* **Docker daemon connection errors in GitHub Actions:**
-  If the workflow fails with `Cannot connect to the Docker daemon`, ensure that the user running the self-hosted runner has the necessary permissions to access the docker socket (e.g., added to the `docker` group on Linux) and that Docker is running.
-* **Connection issues to LocalStack:**
-  If the runner cannot reach LocalStack, verify that LocalStack is running (`localstack status`). If your runner is running directly on the host, ensure `AWS_ENDPOINT` is configured as `http://localhost:4566`. If it is dockerized, make sure it is configured to use `http://host.docker.internal:4566` and has access to the host gateway.
-* **Database Connection Timeout:**
-  If the Spring Boot application fails to connect to the database, use the manual connection commands in [Verify Database Initialization](#manual-database-connection-verification) to verify that the RDS instance is running and the database and users exist.
+* **Workflow stuck on "Waiting for a runner" (Job is queued):**
+  * **Cause:** The workflow specifies `runs-on: self-hosted` but your local runner is offline or missing the correct label.
+  * **Fix:** Ensure your runner is running in your WSL terminal (`./run.sh`) and shows as **Idle** under **Settings -> Actions -> Runners** in GitHub.
+* **Command not found errors in the pipeline (`mvn`, `aws`, or `docker`):**
+  * **Cause:** Since the GitHub self-hosted runner runs directly on your host system (unlike GitLab's container executor), all build tools must be installed on your WSL machine.
+  * **Fix:** Install Maven, AWS CLI, and Docker on WSL and ensure they are in the PATH of the user executing the runner.
+* **Pipeline fails to connect to ECR/ECS (`Connection Refused` on port 4566):**
+  * **Cause:** LocalStack is not running or has crashed.
+  * **Fix:** Run `localstack status` or check `docker ps` to verify LocalStack is running and listening on port `4566`.
+* **Spring Boot task fails to start (Database Connection Timeout):**
+  * **Cause:** The application cannot connect to the RDS container, or the DB credentials are not in the SSM Parameter Store.
+  * **Fix:** Verify that the database parameters were provisioned in LocalStack using `awslocal ssm describe-parameters`. Check database connectivity manually using the commands in [Manual Database Connection Verification](#manual-database-connection-verification).
 
 ---
 
