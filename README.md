@@ -75,6 +75,31 @@ mysql -h localhost.localstack.cloud -P 4510 -u students_staging_ecs -pstudents_s
 
 ---
 
+## Configuration & Secrets
+
+### 1. GitHub Variables & Secrets
+Configure the following in GitHub under **Settings** -> **Secrets and variables** -> **Actions**:
+
+#### Variables:
+* `AWS_DEFAULT_REGION`: `us-east-1`
+* `CI_AWS_ECS_CLUSTER`: `ecs-stage-cluster`
+* `CI_AWS_ECS_SERVICE`: `ecs-stage-service`
+* `AWS_ENDPOINT`: `http://localhost:4566` (use `http://host.docker.internal:4566` if runner is containerized)
+* `DOCKER_REGISTRY`: `000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566`
+* `APP_NAME`: `students-ecs`
+
+#### Secrets:
+* `AWS_ACCESS_KEY_ID`: Retrieve using `tflocal output iam_access_key` (or use `test`)
+* `AWS_SECRET_ACCESS_KEY`: Retrieve using `tflocal output -raw iam_secret_key` (or use `test`)
+
+### 2. SSM Parameter Store
+The application parameters are provisioned automatically in LocalStack SSM Parameter Store by Terraform. You can check them using:
+```bash
+awslocal ssm describe-parameters
+```
+
+---
+
 ## Deployment & Runner Setup
 
 ### 1. Local GitHub Actions Runner Setup
@@ -89,12 +114,9 @@ To run CI/CD workflows locally against LocalStack, you must configure a local **
 Every commit pushed to the `ecs` branch triggers the pipeline (builds the JAR, packages it in a Docker image, pushes to ECR, and updates ECS).
 
 To verify the integration:
-1. Modify a response or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in:
-   [StudentsController.java](src/main/java/com/handson/basic/controller/StudentsController.java)
-
-*By doing this, you will be able to see the change reflected under the `students-controller` section in the Swagger UI once the deployment completes.*
-
-After modifying, commit and push your changes to the `ecs` branch:
+1. Modify a response or method name (e.g., change `getHighSatStudents` to `getHighSatStudents2`) in [StudentsController.java](src/main/java/com/handson/basic/controller/StudentsController.java).
+   *(By doing this, you will be able to see the change reflected under the `student-controller` section in the Swagger UI once the deployment completes).*
+2. Commit and push your changes to the `ecs` branch:
    ```bash
    git add src/main/java/com/handson/basic/controller/StudentsController.java
    git commit -m "update getHighSatStudents test"
@@ -128,30 +150,6 @@ To verify the full integration:
    `http://<cloudfront_domain_name>.cloudfront.localhost.localstack.cloud`
 5. Try logging in to the frontend UI using the **username** and **password** of the student you created via Swagger (in the previous step).
 6. Verify that the login succeeds and that requests to `/api/...` in the Browser DevTools (Network tab) are correctly routed to the backend and resolve with `200 OK` status codes without encountering CORS issues.
----
-
-## Configuration & Secrets
-
-### 1. GitHub Variables & Secrets
-Configure the following in GitHub under **Settings** -> **Secrets and variables** -> **Actions**:
-
-#### Variables:
-* `AWS_DEFAULT_REGION`: `us-east-1`
-* `CI_AWS_ECS_CLUSTER`: `ecs-stage-cluster`
-* `CI_AWS_ECS_SERVICE`: `ecs-stage-service`
-* `AWS_ENDPOINT`: `http://localhost:4566` (use `http://host.docker.internal:4566` if runner is containerized)
-* `DOCKER_REGISTRY`: `000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566`
-* `APP_NAME`: `students-ecs`
-
-#### Secrets:
-* `AWS_ACCESS_KEY_ID`: Retrieve using `tflocal output iam_access_key` (or use `test`)
-* `AWS_SECRET_ACCESS_KEY`: Retrieve using `tflocal output -raw iam_secret_key` (or use `test`)
-
-### 2. SSM Parameter Store
-The application parameters are provisioned automatically in LocalStack SSM Parameter Store by Terraform. You can check them using:
-```bash
-awslocal ssm describe-parameters
-```
 
 ---
 
